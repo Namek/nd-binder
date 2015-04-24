@@ -32,6 +32,9 @@
 	<header nd-bind="page.name"></header>
 	<span nd-bind="people.length"></span>
 
+	<p nd-if="people.length > 1">There is more than one person!</p>
+	<p nd-if="people.length < 1">There are no people :(</p>
+
 	<!--p nd-observe="people">
 		There
 

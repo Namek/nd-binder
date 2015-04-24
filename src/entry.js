@@ -1,4 +1,4 @@
-function ndInit($d, $da, $observe, analyzeBindingExpr) {
+function ndInit($d, $da, $observe, analyzeBindingExpr, evalBoolExprForScope) {
 	function getDirectiveElements(directiveName, scope) {
 		return $da(scope, '[nd-' + directiveName + ']');
 	}
@@ -43,15 +43,16 @@ function ndInit($d, $da, $observe, analyzeBindingExpr) {
 			bindings: []
 		};
 
-		var firstCycleRefreshes = [];
-		analyzeScope(scopeData, firstCycleRefreshes);
+		var firstCycleCalls = [];
+		analyzeScope(scopeData, firstCycleCalls);
 
-		for (var ri = 0, rn = firstCycleRefreshes.length; ri < rn; ++ri) {
-			firstCycleRefreshes[ri]();
+		for (var ri = 0, rn = firstCycleCalls.length; ri < rn; ++ri) {
+			firstCycleCalls[ri]();
 		}
+		firstCycleCalls.length = 0;
 	}
 
-	function analyzeScope(scopeData, firstCycleRefreshes) {
+	function analyzeScope(scopeData, firstCycleCalls) {
 		var scopeName = scopeData.scopeName;
 		var _observes = getDirectiveElements('observe', scopeData.scopeEl);
 		var _ifs = getDirectiveElements('if', scopeData.scopeEl);
@@ -84,7 +85,8 @@ function ndInit($d, $da, $observe, analyzeBindingExpr) {
 					refresher();
 				});
 			})(refresher);
-			firstCycleRefreshes.push(refresher);
+
+			firstCycleCalls.push(refresher);
 		}
 
 		var observables = scopeData.observables;
@@ -106,6 +108,24 @@ function ndInit($d, $da, $observe, analyzeBindingExpr) {
 				// TODO
 				// console.log(changes)
 			});
+		}
+
+		for (var ii = 0; ii < _ifs.length; ++ii) {
+			!(function(iferEl) {
+				console.log(iferEl);
+				var iferExpr = getNdAttr(iferEl, 'if');
+				firstCycleCalls.push(function() {
+					if (!evalBoolExprForScope(scopeData.scope, scopeData.scopeName, iferExpr)) {
+						// remove element completely
+						var parent = iferEl.parentNode;
+						parent.insertBefore(document.createComment('nd-if: ' + iferExpr), iferEl);
+						parent.removeChild(iferEl);
+					}
+					else {
+						iferEl.removeAttribute('nd-if');
+					}
+				});
+			})(_ifs[ii]);
 		}
 	}
 
@@ -149,10 +169,32 @@ function ndInitStandard() {
 		return el.querySelectorAll(query);
 	};
 	var observe = function(obj, cb) {
-		Object.observe(obj, cb);
+		// TODO maybe just Array.isArray() ?
+		if (Object.prototype.toString.call(obj) === '[object Array]') {
+			Array.observe(obj, cb);
+		}
+		else {
+			Object.observe(obj, cb);
+		}
+	};
+	var evalBoolExprForScope = function(scope, scopeName, expr) {
+		var a = false, b = false;
+		try {
+			a = eval(expr);
+		}
+		catch(err) {}
+
+		if (!a) {
+			try {
+				b = eval(scopeName + '.' + expr);
+			}
+			catch (err) { }
+		}
+
+		return a || b;
 	};
 
-	ndInit($d, $da, observe, analyzeBindingExpr);
+	ndInit($d, $da, observe, analyzeBindingExpr, evalBoolExprForScope);
 }
 
 
