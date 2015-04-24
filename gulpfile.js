@@ -4,6 +4,7 @@ var gulp = require('gulp'),
 	del = require('del'),
 	concat = require('gulp-concat'),
 	rename = require('gulp-rename'),
+	plumber = require('gulp-plumber'),
 	jshint = require('gulp-jshint'),
 	uglify = require('gulp-uglify'),
 	watch = require('gulp-watch'),
@@ -28,6 +29,7 @@ var Path = {
 
 function build() {
 	return gulp.src(Path.src)
+		.pipe(plumber())
 		.pipe(jshint())
 		.pipe(jshint.reporter('jshint-stylish'))
 
