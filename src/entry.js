@@ -15,9 +15,16 @@ function ndInit($d, $da, $observe, analyzeBindingExpr) {
 		console.error(msg);
 	}
 
+	function getScopeData(scopeName) {
+		if (!_scopesData[scopeName]) {
+			throw "Scope Data doesn't exist for scope: " + scopeName;
+		}
+
+		return _scopesData[scopeName];
+	}
+
 	var _scopeEls = getDirectiveElements('scope', document);
-	var observablesByScopes = {};
-	var bindingsByScopes = {};
+	var _scopesData = {}; // map: scope data by name
 
 	for (var i = 0; i < _scopeEls.length; ++i) {
 		var scopeEl = _scopeEls[i];
@@ -28,30 +35,30 @@ function ndInit($d, $da, $observe, analyzeBindingExpr) {
 			notifyError('Scope ' + scopeName + ' was not found!');
 			continue;
 		}
-		if (!observablesByScopes[scopeName]) {
-			observablesByScopes[scopeName] = {};
-		}
-		var observables = observablesByScopes[scopeName];
-
-		if (!bindingsByScopes[scopeName]) {
-			bindingsByScopes[scopeName] = [];
-		}
-		var bindings = bindingsByScopes[scopeName];
+		var scopeData = _scopesData[scopeName] = {
+			scope: scope,			//the actual scope (custom user's data)
+			scopeEl: scopeEl,
+			scopeName: scopeName,
+			observables: {},
+			bindings: []
+		};
 
 		var firstCycleRefreshes = [];
-		analyzeScope(scope, scopeName, scopeEl, observables, bindings, firstCycleRefreshes);
+		analyzeScope(scopeData, firstCycleRefreshes);
 
 		for (var ri = 0, rn = firstCycleRefreshes.length; ri < rn; ++ri) {
 			firstCycleRefreshes[ri]();
 		}
 	}
 
-	function analyzeScope(scope, scopeName, scopeEl, observables, bindings, firstCycleRefreshes) {
-		var _observes = getDirectiveElements('observe', scopeEl);
-		var _ifs = getDirectiveElements('if', scopeEl);
-		var _repeats = getDirectiveElements('repeat', scopeEl);
-		var _binds = getDirectiveElements('bind', scopeEl);
+	function analyzeScope(scopeData, firstCycleRefreshes) {
+		var scopeName = scopeData.scopeName;
+		var _observes = getDirectiveElements('observe', scopeData.scopeEl);
+		var _ifs = getDirectiveElements('if', scopeData.scopeEl);
+		var _repeats = getDirectiveElements('repeat', scopeData.scopeEl);
+		var _binds = getDirectiveElements('bind', scopeData.scopeEl);
 
+		var bindings = scopeData.bindings;
 		for (var ib = 0; ib < _binds.length; ++ib) {
 			var bindEl = _binds[ib];
 			var bindExpr = getNdAttr(bindEl, 'bind');
@@ -78,10 +85,11 @@ function ndInit($d, $da, $observe, analyzeBindingExpr) {
 			firstCycleRefreshes.push(bind.refresh);
 		}
 
+		var observables = scopeData.observables;
 		for (var io = 0; io < _observes.length; ++io) {
 			var observeEl = _observes[io];
 			var observeExpr = getNdAttr(observeEl, 'observe');
-			var observedData = scope[observeExpr];
+			var observedData = scopeData.scope[observeExpr];
 
 			if (!observables[observeExpr]) {
 				observables[observeExpr] = [];
