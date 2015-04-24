@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>nd-binder</title>
+	<link rel="stylesheet" href="">
+	<script src="../dist/nd-binder.js" type="text/javascript" charset="utf-8"></script>
+	<script type="text/javascript">
+		var PeopleScope = {
+			page: {
+				name: 'People'
+			},
+			people: [
+				{
+					fname: 'John',
+					lname: 'Depp'
+				},
+				{
+					fname: 'Jet',
+					lname: 'Li'
+				}
+			]
+		};
+
+		setTimeout(function() {
+			PeopleScope.people.push({fname: 'omg', lname: 'omg'});
+		}, 1000);
+	</script>
+</head>
+<body nd-scope="PeopleScope">
+	<header nd-bind="page.name"></header>
+
+	<!--p nd-observe="people">
+		There
+
+		<span nd-if="people.length==0">are no</span>
+		<span nd-if="people.length==1">is one</span>
+		<span nd-if="people.length > 1">
+			are <span nd-bind="people.length"></span>
+		</span>
+
+		<span nd-if="people.length==1">person.</span>
+		<span nd-if="people.length!=1">people.</span>
+	</p>
+
+	<ul>
+		<li nd-repeat="person in people">
+			<span nd-bind="person.fname"></span>
+			<span nd-bind="person.lname"></span>
+		</li>
+	</ul-->
+
+	<script type="text/javascript">
+		ndInitStandard();
+	</script>
+</body>
+</html>

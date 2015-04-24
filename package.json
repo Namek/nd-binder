@@ -1,0 +1,28 @@
+{
+  "name": "nd-binder",
+  "version": "0.1.0",
+  "description": "Small JavaScript data-binding library",
+  "main": "gulpfile.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "NamekDev Ltd",
+  "license": "ISC",
+  "devDependencies": {
+    "del": "^1.1.1",
+    "gulp": "^3.8.11",
+    "gulp-continuous-concat": "^0.1.1",
+    "gulp-jshint": "^1.10.0",
+    "gulp-livereload": "^3.8.0",
+    "gulp-rename": "^1.2.2",
+    "gulp-size": "^1.2.1",
+    "gulp-uglify": "^1.2.0",
+    "gulp-util": "^3.0.4",
+    "gulp-watch": "^4.2.4",
+    "jshint-stylish": "^1.0.1",
+    "merge": "^1.2.0"
+  }
+}
