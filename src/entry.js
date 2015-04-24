@@ -71,18 +71,20 @@ function ndInit($d, $da, $observe, analyzeBindingExpr) {
 				accessors: getElementValueAccessors(bindEl),
 				observable: eval(scopeName+'.'+expr.observable),
 				refresh: function() {
-					var value = eval(scopeName+'.'+bind.fullExpr);
+					var value = eval(scopeName+'.'+this.fullExpr);
 					console.log(value);
-					bind.accessors.set(value);
+					this.accessors.set(value);
 				}
 			};
 			bindings.push(bind);
+			var refresher = bind.refresh.bind(bind);
 
-			$observe(bind.observable, function(changes) {
-				console.log('refreshing ' + bind.fullExpr);
-				bind.refresh();
-			});
-			firstCycleRefreshes.push(bind.refresh);
+			!(function(refresher) {
+				$observe(bind.observable, function(changes) {
+					refresher();
+				});
+			})(refresher);
+			firstCycleRefreshes.push(refresher);
 		}
 
 		var observables = scopeData.observables;
