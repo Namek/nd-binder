@@ -1,4 +1,4 @@
-function ndInit($d, $da, $observe, analyzeBindingExpr, evalBoolExprForScope) {
+function ndInit($d, $da, $observe, analyzeBindingExpr, evalBoolExprForScope, evalClassesForScope, defineClass) {
 	function getDirectiveElements(directiveName, scope) {
 		return $da(scope, '[nd-' + directiveName + ']');
 	}
@@ -54,10 +54,13 @@ function ndInit($d, $da, $observe, analyzeBindingExpr, evalBoolExprForScope) {
 
 	function analyzeScope(scopeData, firstCycleCalls) {
 		var scopeName = scopeData.scopeName;
-		var _observes = getDirectiveElements('observe', scopeData.scopeEl);
-		var _ifs = getDirectiveElements('if', scopeData.scopeEl);
-		var _repeats = getDirectiveElements('repeat', scopeData.scopeEl);
-		var _binds = getDirectiveElements('bind', scopeData.scopeEl);
+		var scopeEl = scopeData.scopeEl;
+
+		var _observes = getDirectiveElements('observe', scopeEl);
+		var _ifs = getDirectiveElements('if', scopeEl);
+		var _repeats = getDirectiveElements('repeat', scopeEl);
+		var _binds = getDirectiveElements('bind', scopeEl);
+		var _classes = getDirectiveElements('class', scopeEl);
 
 		var bindings = scopeData.bindings;
 		for (var ib = 0; ib < _binds.length; ++ib) {
@@ -127,6 +130,24 @@ function ndInit($d, $da, $observe, analyzeBindingExpr, evalBoolExprForScope) {
 				});
 			})(_ifs[ii]);
 		}
+
+		// example: nd-class="{two: 'people.length==2', three: 'people.length==3'}"
+		for (var ic = 0; ic < _classes.length; ++ic) {
+			var classedEl = _classes[ic];
+
+			(function(classedEl) {
+				var classExpr = getNdAttr(classedEl, 'class');
+
+				function refresh() {
+					var classes = evalClassesForScope(scope, scopeName, classExpr);
+					for (var className in classes) {
+						defineClass(classedEl, className, classes[className]);
+					}
+				}
+
+				firstCycleCalls.push(refresh.bind(this));
+			})(classedEl);
+		}
 	}
 
 	function getElementValueAccessors(el) {
@@ -194,7 +215,38 @@ function ndInitStandard() {
 		return a || b;
 	};
 
-	ndInit($d, $da, observe, analyzeBindingExpr, evalBoolExprForScope);
+	var classSyntaxErr = 'nd-class should have syntax: "{ red: people.length > 0 }"';
+	function evalClassesForScope(scope, scopeName, classesStr) {
+		var expr = classesStr.trim();
+		if (!(expr[0] == '{' && expr[expr.length-1] == '}')) {
+			throw classSyntaxErr;
+		}
+
+		var exprs = expr.substring(1, expr.length-1).split(',');
+		var pairs = {};
+		for (var i = 0, n = exprs.length; i < n; ++i) {
+			var keyAndExpr = exprs[i].split(':');
+
+			if (keyAndExpr.length !== 2) {
+				throw classSyntaxErr;
+			}
+
+			pairs[keyAndExpr[0].trim()] = evalBoolExprForScope(scope, scopeName, keyAndExpr[1].trim());
+		}
+
+		return pairs;
+	}
+
+	function defineClass(el, className, turnOn) {
+		if (turnOn) {
+			el.classList.add(className);
+		}
+		else {
+			el.classList.remove(className);
+		}
+	}
+
+	ndInit($d, $da, observe, analyzeBindingExpr, evalBoolExprForScope, evalClassesForScope, defineClass);
 }
 
 

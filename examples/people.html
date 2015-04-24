@@ -5,6 +5,14 @@
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<title>nd-binder</title>
 	<link rel="stylesheet" href="">
+	<style>
+		.two {
+			color: red;
+		}
+		.three {
+			background-color: green;
+		}
+	</style>
 	<script src="../dist/nd-binder.js" type="text/javascript" charset="utf-8"></script>
 	<script type="text/javascript">
 		var PeopleScope = {
@@ -32,20 +40,20 @@
 	<header nd-bind="page.name"></header>
 	<span nd-bind="people.length"></span>
 
-	<p nd-if="people.length > 1">There is more than one person!</p>
+	<p nd-if="people.length > 1" nd-class="{two: people.length==2, three: people.length==3}" nd-observe="people">There is more than one person!</p>
 	<p nd-if="people.length < 1">There are no people :(</p>
 
 	<!--p nd-observe="people">
 		There
 
-		<span nd-if="people.length==0">are no</span>
-		<span nd-if="people.length==1">is one</span>
-		<span nd-if="people.length > 1">
+		<span nd-show="people.length==0">are no</span>
+		<span nd-show="people.length==1">is one</span>
+		<span nd-show="people.length > 1">
 			are <span nd-bind="people.length"></span>
 		</span>
 
-		<span nd-if="people.length==1">person.</span>
-		<span nd-if="people.length!=1">people.</span>
+		<span nd-show="people.length==1">person.</span>
+		<span nd-show="people.length!=1">people.</span>
 	</p>
 
 	<ul>
