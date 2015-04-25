@@ -15,11 +15,11 @@
 	</style>
 	<script src="../dist/nd-binder.js" type="text/javascript" charset="utf-8"></script>
 	<script type="text/javascript">
-		var PeopleScope = {
-			page: {
+		var PeopleScope = new function() {
+			this.page = {
 				name: 'People'
-			},
-			people: [
+			};
+			this.people = [
 				{
 					fname: 'John',
 					lname: 'Depp'
@@ -28,7 +28,7 @@
 					fname: 'Jet',
 					lname: 'Li'
 				}
-			]
+			];
 		};
 
 		setTimeout(function() {
@@ -64,7 +64,7 @@
 	</ul-->
 
 	<script type="text/javascript">
-		ndInitStandard();
+		nd.init();
 	</script>
 </body>
 </html>

@@ -1,4 +1,6 @@
-function ndInit($d, $da, $observe, analyzeBindingExpr, evalBoolExprForScope, evalClassesForScope, defineClass) {
+var nd = nd || {};
+
+nd.initCustom = function(utils) {
 	function getDirectiveElements(directiveName, scope) {
 		return $da(scope, '[nd-' + directiveName + ']');
 	}
@@ -22,6 +24,15 @@ function ndInit($d, $da, $observe, analyzeBindingExpr, evalBoolExprForScope, eva
 
 		return _scopesData[scopeName];
 	}
+
+	var $d = utils.$d;
+	var $da = utils.$da;
+	var $observe = utils.observe;
+	var evalInScope = utils.evalInScope;
+	var analyzeBindingExpr = utils.analyzeBindingExpr;
+	var evalBoolExprForScope = utils.evalBoolExprForScope;
+	var evalClassesForScope = utils.evalClassesForScope;
+	var defineClass = utils.defineClass;
 
 	var _scopeEls = getDirectiveElements('scope', document);
 	var _scopesData = {}; // map: scope data by name
@@ -73,9 +84,9 @@ function ndInit($d, $da, $observe, analyzeBindingExpr, evalBoolExprForScope, eva
 				expr: expr,
 				fullExpr: bindExpr,
 				accessors: getElementValueAccessors(bindEl),
-				observable: eval(scopeName+'.'+expr.observable),
+				observable: evalInScope(scope, expr.observable),
 				refresh: function() {
-					var value = eval(scopeName+'.'+this.fullExpr);
+					var value = evalInScope(scope, this.fullExpr);
 					console.log(value);
 					this.accessors.set(value);
 				}
@@ -94,23 +105,31 @@ function ndInit($d, $da, $observe, analyzeBindingExpr, evalBoolExprForScope, eva
 
 		var observables = scopeData.observables;
 		for (var io = 0; io < _observes.length; ++io) {
-			var observeEl = _observes[io];
-			var observeExpr = getNdAttr(observeEl, 'observe');
-			var observedData = scopeData.scope[observeExpr];
+			(function(observeEl) {
+				var observeExpr = getNdAttr(observeEl, 'observe');
+				var observedData = scopeData.scope[observeExpr];
+				var observes = observables[observeExpr];
 
-			if (!observables[observeExpr]) {
-				observables[observeExpr] = [];
-			}
-			observables[observeExpr].push({
-				el: observeEl,
-				expr: observeExpr,
-				data: observedData
-			});
-			
-			$observe(observedData, function(changes) {
-				// TODO
-				// console.log(changes)
-			});
+				if (!observes) {
+					observes = observables[observeExpr] = [];
+
+					$observe(observedData, function(changes) {
+						for (var i = 0, n = observes.length; i < n; ++i) {
+							observes[i].refresh();
+						}
+					});
+				}
+				var observe = {
+					el: observeEl,
+					expr: observeExpr,
+					data: observedData,
+					refresh: function() {
+						// TODO call all elements which listen to this.
+					}
+				};
+				observes.push(observe);
+				firstCycleCalls.push(observe.refresh.bind(this));
+			})(_observes[io]);
 		}
 
 		for (var ii = 0; ii < _ifs.length; ++ii) {
@@ -176,20 +195,23 @@ function ndInit($d, $da, $observe, analyzeBindingExpr, evalBoolExprForScope, eva
 	// directive -> directiveInstance
 	// observe(nd-observe) -> onchange -> refresh nd-observe children
 	// 
-}
+};
 
-function ndInitStandard() {
-	var $d = function() {
+nd.getStandardUtils = function() {
+	var utils = {};
+
+	utils.$d = function() {
 		var query = arguments[arguments.length == 1 ? 0 : 1];
 		var el = arguments.length == 1 ? document : arguments[0];
 		return el.querySelector(query);
 	};
-	var $da = function() {
+	utils.$da = function() {
 		var query = arguments[arguments.length == 1 ? 0 : 1];
 		var el = arguments.length == 1 ? document : arguments[0];
 		return el.querySelectorAll(query);
 	};
-	var observe = function(obj, cb) {
+
+	utils.observe = function(obj, cb) {
 		// TODO maybe just Array.isArray() ?
 		if (Object.prototype.toString.call(obj) === '[object Array]') {
 			Array.observe(obj, cb);
@@ -198,25 +220,59 @@ function ndInitStandard() {
 			Object.observe(obj, cb);
 		}
 	};
-	var evalBoolExprForScope = function(scope, scopeName, expr) {
-		var a = false, b = false;
-		try {
-			a = eval(expr);
-		}
-		catch(err) {}
 
-		if (!a) {
-			try {
-				b = eval(scopeName + '.' + expr);
+	utils.evalInScope = function(context, js) {
+		with (context) {
+			return eval(js);
+		}
+	};
+
+	// This function uses a trick to get the last part (`path`) separated from `observable` expression.
+	// It may be needed to improve that, use then Pratt's Expression Parser:
+	// http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/
+	utils.analyzeBindingExpr = function(expr) {
+		expr = expr.trim();
+		var lastChar = expr[expr.length-1];
+		var i;
+
+		if (lastChar == ']') {
+			// find first '[' character
+			var balance = +1;
+			for (i = expr.length-2; i >= 0 && balance !== 0; i--) {
+				var c = expr[i];
+				balance += (expr[i] === ']') ? 1 : (expr[i] === '[' ? -1 : 0);
 			}
-			catch (err) { }
+
+			if (balance !== 0) {
+				throw "Expression is invalid: " + expr;
+			}
+
+			return {
+				observable: expr.substring(0, i+1),
+				path: expr.substring(i+1, expr.length)
+			};
+		}
+		else {
+			// find first '.' (dot) character
+			for (i = expr.length-1; i >= 0; i--) {
+				if (expr[i] === '.') {
+					return {
+						observable: expr.substring(0, i),
+						path: expr.substring(i, expr.length)
+					};
+				}
+			}
 		}
 
-		return a || b;
+		throw "Analyzer couldn't parse expression: " + expr;
+	};
+
+	utils.evalBoolExprForScope = function(scope, scopeName, expr) {
+		return utils.evalInScope(scope, expr);
 	};
 
 	var classSyntaxErr = 'nd-class should have syntax: "{ red: people.length > 0 }"';
-	function evalClassesForScope(scope, scopeName, classesStr) {
+	utils.evalClassesForScope = function(scope, scopeName, classesStr) {
 		var expr = classesStr.trim();
 		if (!(expr[0] == '{' && expr[expr.length-1] == '}')) {
 			throw classSyntaxErr;
@@ -231,61 +287,24 @@ function ndInitStandard() {
 				throw classSyntaxErr;
 			}
 
-			pairs[keyAndExpr[0].trim()] = evalBoolExprForScope(scope, scopeName, keyAndExpr[1].trim());
+			pairs[keyAndExpr[0].trim()] = utils.evalBoolExprForScope(scope, scopeName, keyAndExpr[1].trim());
 		}
 
 		return pairs;
-	}
+	};
 
-	function defineClass(el, className, turnOn) {
+	utils.defineClass = function(el, className, turnOn) {
 		if (turnOn) {
 			el.classList.add(className);
 		}
 		else {
 			el.classList.remove(className);
 		}
-	}
+	};
 
-	ndInit($d, $da, observe, analyzeBindingExpr, evalBoolExprForScope, evalClassesForScope, defineClass);
-}
+	return utils;
+};
 
-
-// This function uses a trick to get the last part (`path`) separated from `observable` expression.
-// It may be needed to improve that, use then Pratt's Expression Parser:
-// http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/
-function analyzeBindingExpr(expr) {
-	expr = expr.trim();
-	var lastChar = expr[expr.length-1];
-	var i;
-
-	if (lastChar == ']') {
-		// find first '[' character
-		var balance = +1;
-		for (i = expr.length-2; i >= 0 && balance !== 0; i--) {
-			var c = expr[i];
-			balance += (expr[i] === ']') ? 1 : (expr[i] === '[' ? -1 : 0);
-		}
-
-		if (balance !== 0) {
-			throw "Expression is invalid: " + expr;
-		}
-
-		return {
-			observable: expr.substring(0, i+1),
-			path: expr.substring(i+1, expr.length)
-		};
-	}
-	else {
-		// find first '.' (dot) character
-		for (i = expr.length-1; i >= 0; i--) {
-			if (expr[i] === '.') {
-				return {
-					observable: expr.substring(0, i),
-					path: expr.substring(i, expr.length)
-				};
-			}
-		}
-	}
-
-	throw "Analyzer couldn't parse expression: " + expr;
+nd.init = function() {
+	nd.initCustom(nd.getStandardUtils());
 }
