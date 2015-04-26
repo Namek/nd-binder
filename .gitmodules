@@ -1,0 +1,3 @@
+[submodule "lib/js_expr"]
+	path = lib/js_expr
+	url = https://github.com/Namek/js_expr.git

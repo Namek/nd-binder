@@ -1,6 +1,8 @@
-var nd = nd || {};
+nd.init = function() {
+	function $parse(expr) {
+		return utils.$expr.parse(expr);
+	}
 
-nd.initCustom = function(utils) {
 	function getDirectiveElements(directiveName, scope) {
 		return $da(scope, '[nd-' + directiveName + ']');
 	}
@@ -25,6 +27,7 @@ nd.initCustom = function(utils) {
 		return _scopesData[scopeName];
 	}
 
+	var utils = nd.utils;
 	var $d = utils.$d;
 	var $da = utils.$da;
 	var $observe = utils.observe;
@@ -182,11 +185,6 @@ nd.initCustom = function(utils) {
 			}
 		};
 	}
-	
-
-	function createDirective() {
-
-	}
 
 	function refreshNodes() {
 
@@ -197,21 +195,21 @@ nd.initCustom = function(utils) {
 	// 
 };
 
-nd.getStandardUtils = function() {
-	var utils = {};
-
-	utils.$d = function() {
+nd.utils = (function() {
+var classSyntaxErr = 'nd-class should have syntax like: "{ red: people.length == 0, green: people.length > 0 }"';
+var utils = {
+	$d: function() {
 		var query = arguments[arguments.length == 1 ? 0 : 1];
 		var el = arguments.length == 1 ? document : arguments[0];
 		return el.querySelector(query);
-	};
-	utils.$da = function() {
+	},
+	$da: function() {
 		var query = arguments[arguments.length == 1 ? 0 : 1];
 		var el = arguments.length == 1 ? document : arguments[0];
 		return el.querySelectorAll(query);
-	};
+	},
 
-	utils.observe = function(obj, cb) {
+	observe: function(obj, cb) {
 		// TODO maybe just Array.isArray() ?
 		if (Object.prototype.toString.call(obj) === '[object Array]') {
 			Array.observe(obj, cb);
@@ -219,18 +217,18 @@ nd.getStandardUtils = function() {
 		else {
 			Object.observe(obj, cb);
 		}
-	};
+	},
 
-	utils.evalInScope = function(context, js) {
+	evalInScope: function(context, js) {
 		with (context) {
 			return eval(js);
 		}
-	};
+	},
 
 	// This function uses a trick to get the last part (`path`) separated from `observable` expression.
 	// It may be needed to improve that, use then Pratt's Expression Parser:
 	// http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/
-	utils.analyzeBindingExpr = function(expr) {
+	analyzeBindingExpr: function(expr) {
 		expr = expr.trim();
 		var lastChar = expr[expr.length-1];
 		var i;
@@ -265,14 +263,13 @@ nd.getStandardUtils = function() {
 		}
 
 		throw "Analyzer couldn't parse expression: " + expr;
-	};
+	},
 
-	utils.evalBoolExprForScope = function(scope, scopeName, expr) {
+	evalBoolExprForScope: function(scope, scopeName, expr) {
 		return utils.evalInScope(scope, expr);
-	};
+	},
 
-	var classSyntaxErr = 'nd-class should have syntax: "{ red: people.length > 0 }"';
-	utils.evalClassesForScope = function(scope, scopeName, classesStr) {
+	evalClassesForScope: function(scope, scopeName, classesStr) {
 		var expr = classesStr.trim();
 		if (!(expr[0] == '{' && expr[expr.length-1] == '}')) {
 			throw classSyntaxErr;
@@ -291,20 +288,17 @@ nd.getStandardUtils = function() {
 		}
 
 		return pairs;
-	};
+	},
 
-	utils.defineClass = function(el, className, turnOn) {
+	defineClass: function(el, className, turnOn) {
 		if (turnOn) {
 			el.classList.add(className);
 		}
 		else {
 			el.classList.remove(className);
 		}
-	};
-
-	return utils;
+	}
 };
+return utils;
+})();
 
-nd.init = function() {
-	nd.initCustom(nd.getStandardUtils());
-}

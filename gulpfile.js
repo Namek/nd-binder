@@ -2,6 +2,11 @@ var gulp = require('gulp'),
 	merge = require('merge'),
 	gutil = require('gulp-util'),
 	del = require('del'),
+	addSrc = require('gulp-add-src'),
+	tap = require('gulp-tap'),
+	pathEndsWith = require('path-ends-with'),
+	header = require('gulp-header'),
+	footer = require('gulp-footer'),
 	concat = require('gulp-concat'),
 	rename = require('gulp-rename'),
 	plumber = require('gulp-plumber'),
@@ -14,7 +19,7 @@ var gulp = require('gulp'),
 var Folder = {
 	src: 'src/',
 	dist: 'dist/'
-}
+};
 
 var Filename = {
 	nonMinified: 'nd-binder.js',
@@ -23,6 +28,7 @@ var Filename = {
 
 var Path = {
 	src: Folder.src + '*.js',
+	parser: 'js_expr/dist/js_expr.js',
 	nonMinified: Folder.dist + Filename.nonMinified,
 	minified: Folder.dist + Filename.minified
 };
@@ -33,8 +39,26 @@ function build() {
 		.pipe(jshint())
 		.pipe(jshint.reporter('jshint-stylish'))
 
-		// first output a normal version
+		// append expression parser
+		.pipe(addSrc.append(Path.parser))
+		.pipe(tap(function(file) {
+			if (pathEndsWith(file.path, Path.parser)) {
+				file.contents = Buffer.concat([
+					new Buffer('nd.utils.$expr=(function(){var module={};'),
+					file.contents,
+					new Buffer('return module.exports;})();')
+				]);
+			}
+		}))
+
+		// concatenate all files
 		.pipe(concat(Filename.nonMinified))
+
+		// enclose whole framework in 'ndBinder' scope
+		.pipe(header('var ndBinder = (function() {var nd = {};'))
+		.pipe(footer('return nd;})();'))
+
+		// first output a normal version
 		.pipe(gulp.dest(Folder.dist))
 		.pipe(size({ title: 'non-uglified' }))
 
