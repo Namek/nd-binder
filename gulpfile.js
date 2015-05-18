@@ -27,8 +27,8 @@ var Filename = {
 };
 
 var Path = {
-	src: Folder.src + '*.js',
-	parser: 'js_expr/dist/js_expr.js',
+	src: Folder.src + '/**/*.js',
+	parser: 'lib/js_expr/dist/js_expr.js',
 	nonMinified: Folder.dist + Filename.nonMinified,
 	minified: Folder.dist + Filename.minified
 };
@@ -44,9 +44,9 @@ function build() {
 		.pipe(tap(function(file) {
 			if (pathEndsWith(file.path, Path.parser)) {
 				file.contents = Buffer.concat([
-					new Buffer('nd.utils.$expr=(function(){var module={};'),
+					new Buffer('nd.utils.$expr=(function(){var module={};\n'),
 					file.contents,
-					new Buffer('return module.exports;})();')
+					new Buffer('return module.exports;})();\n')
 				]);
 			}
 		}))

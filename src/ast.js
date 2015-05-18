@@ -62,22 +62,52 @@ nd.ast = {
 		}, maxNodes);
 	},
 
+	findIdentifiers: function(ast, maxNodes) {
+		return this.collectAstNodes(ast, function(astNode) {
+			return astNode.type === 'Identifier' ? COLLECT_ELEMENT : CONTINUE;
+		}, maxNodes);
+	},
+
+	findNodesByTypes: function(ast, types) {
+		return this.collectAstNodes(ast, function(astNode) {
+			for (var i = 0; i < types.length; ++i) {
+				if (astNode.type === types[i]) {
+					return COLLECT_ELEMENT | STOP_TRAVERSING_DEEPER;
+				}
+			}
+
+			return CONTINUE;
+		});
+	},
+
+	findAllObservables: function(ast) {
+		return this.findNodesByTypes(ast, ['Identifier', 'MemberExpression']);
+	},
+
 	// converts Abstract Syntax Tree back to code
-	render: function(ast) {
-		function render(node) {
+	render: function(ast, callThroughThis) {
+		if (callThroughThis === undefined) {
+			callThroughThis = false;
+		}
+
+		function render(node, callThroughThis) {
 			if (node.type === 'ConditionalExpression') {
-				return '(' + render(node.test) + '?' +  render(node.consequent) + ':' + render(node.alternate) + ')';
+				return '(' + render(node.test, callThroughThis) + '?' +  render(node.consequent, callThroughThis) + ':' + render(node.alternate, callThroughThis) + ')';
 			}
 			else if (node.type === 'BinaryExpression') {
-				return '(' + render(node.left) + node.operator + render(node.right) + ')';
+				return '(' + render(node.left, callThroughThis) + node.operator + render(node.right, callThroughThis) + ')';
 			}
 			else if (node.type === 'MemberExpression') {
+				var code = callThroughThis ? 'this.' : '';
+
 				if (node.computed) {
-					return render(node.object) + '[' + node.property.name + ']';
+					code += render(node.object, false) + '[' + node.property.name + ']';
 				}
 				else {
-					return render(node.object) + '.' + node.property.name;
+					code += render(node.object, false) + '.' + node.property.name;
 				}
+
+				return code;
 			}
 			else if (node.type === 'SequenceExpression') {
 				var buffer = '';
@@ -85,7 +115,7 @@ nd.ast = {
 					if (i > 0) {
 						buffer += ',';
 					}
-					buffer += render(node.expressions[i]);
+					buffer += render(node.expressions[i], callThroughThis);
 				}
 				return buffer;
 			}
@@ -96,24 +126,22 @@ nd.ast = {
 				return node.value;
 			}
 			else if (node.type === 'Identifier') {
-				return node.name;
+				return callThroughThis ? 'this.' + node.name : node.name;
 			}
 
 			throw "Unknown AST node type: " + node.type;
 		}
 
-		return render(ast);
+		return render(ast, callThroughThis);
 	},
 
-	renderForScope: function(scopeName, ast) {
-		// TODO create MemberExpression
-
-		// TODO if ast.type == ThisExpression then replace 'this'->scopeName
-		// TODO assert ast.type == Identifier || Literal || MemberExpression
+	thisifyExpression: function(expr) {
+		var ast = nd.utils.$expr.parse(expr);
+		return this.render(ast, true);
 	},
 
 	testRender: function(expr) {
-		var ast = nd.$expr.parse(expr);
+		var ast = nd.utils.$expr.parse(expr);
 		return {
 			ast: ast,
 			code: this.render(ast)
