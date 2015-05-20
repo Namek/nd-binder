@@ -18,6 +18,10 @@ return {
 		else {
 			Object.observe(obj, cb);
 		}
+	},
+
+	cloneNode: function(node, recursive) {
+		return node.cloneNode(recursive);
 	}
 };
 })();

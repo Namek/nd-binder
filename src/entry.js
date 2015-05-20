@@ -110,16 +110,19 @@ var directives = (function() {
 						var change = changes[i];
 
 						if (change.type == 'splice' || change.type == 'update' && change.name == observable.property) {
-							listener();
+							listener(change);
 
 							// Optimize: We don't need to call the refresh listener more than once.
 							return;
 						}
 					}
 				});
+
+				return obj;
 			},
 			registerElementValueListener: function(el, listener) {
 				// TODO if input, then listen on 'value', otherwise on innerHTML
+				// TODO support contenteditable
 			},
 			setObjectValue: function(scope, valueInfo, newValue) {
 				var obj = evalInContext(valueInfo.objectPath, scope);
