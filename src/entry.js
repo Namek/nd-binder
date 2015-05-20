@@ -18,6 +18,7 @@ var directives = (function() {
 	})();
 
 	function evalInContext(js, context) {
+		/* jshint evil:true */
 		return function() { return eval(js); }.call(context);
 	}
 
@@ -189,7 +190,7 @@ var directives = (function() {
 				for (var i = 0, n = memberExprs.length; i < n; ++i) {
 					addObservable(retArr, memberExprs[i]);
 				}
-				for (var i = 0, n = identifierExprs.length; i < n; ++i) {
+				for (i = 0, n = identifierExprs.length; i < n; ++i) {
 					addObservable(retArr, identifierExprs[i]);
 				}
 
@@ -395,7 +396,7 @@ nd.init = function() {
 		}
 	}
 
-	for (var i = 0, n = evalQueue.length; i < n; ++i) {
+	for (i = 0, n = evalQueue.length; i < n; ++i) {
 		evalQueue[i]();
 	}
 	evalQueue.length = 0;

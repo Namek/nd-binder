@@ -12,8 +12,7 @@ return {
 	},
 
 	observe: function(obj, cb) {
-		// TODO maybe just Array.isArray() ?
-		if (Object.prototype.toString.call(obj) === '[object Array]') {
+		if (Array.isArray(obj)) {
 			Array.observe(obj, cb);
 		}
 		else {
