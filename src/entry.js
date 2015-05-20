@@ -104,12 +104,16 @@ var directives = (function() {
 					obj = evalInContext(observable.objectPath + ' = ' + evalNew, scope);
 				}
 
+				var child = this.getObjectValue(scope, observable);
+				if (typeof child === 'object') {
+					obj = child;
+				}
+
 				nd.utils.observe(obj, function(changes) {
-					console.log(changes);
 					for (var i = 0; i < changes.length; ++i) {
 						var change = changes[i];
 
-						if (change.type == 'splice' || change.type == 'update' && change.name == observable.property) {
+						if (change.type == 'splice' || (change.type == 'update' && change.name == observable.property)) {
 							listener(change);
 
 							// Optimize: We don't need to call the refresh listener more than once.

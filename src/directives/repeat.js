@@ -9,13 +9,14 @@ nd.directives.create('repeat', function(d) {
 		var arrIterRegexp = new RegExp(/(.+) +in +(.+)/g);
 		var arrMatch = arrIterRegexp.exec(expr);
 
-		var keyVarName, valVarName, collectionVarName;
+		var keyVarName, valVarName, collectionVarName, needCheckOwnProperty = false;
 
 		if (objMatch !== null) {
 			// Iterating over object properties, like `(key, val) in obj`
 			keyVarName = objMatch[1];
 			valVarName = objMatch[2];
 			collectionVarName = nd.ast.thisifyExpression(objMatch[3]);
+			needCheckOwnProperty = true;
 		}
 		else if (arrMatch !== null) {
 			// Iterating over array values, like `val in arr`
@@ -29,29 +30,50 @@ nd.directives.create('repeat', function(d) {
 			throw "Unknown nd-repeat expression: " + expr + ". Directive supports iterating over object properties (key, value) or array values.";
 		}
 
-		var clonedEl = nd.utils.cloneNode(el, true);
+		var parentEl = el.parentNode;
+		var elCopy = nd.utils.cloneNode(el, true);
+		elCopy.removeAttribute('nd-repeat');
+		var markComment = document.createComment('nd-repeat');
+		parentEl.insertBefore(markComment, el);
+		parentEl.removeChild(el);
+
+		var childrenEls = [];
 
 		var observable = api.bindingExprToObservable(collectionVarName);
-		var collection = api.observe(scope, observable, refreshView);
+		api.observe(parentScope, observable, refreshView);
 		api.queue(refreshView);
 
+
+		function isOwnProperty(obj, key) {
+			return obj.hasOwnProperty(key) && key.indexOf('$') < 0;
+		}
+
 		function refreshView() {
+			var collection = api.getObjectValue(scope, observable);
+
 			// TODO optimize: remove elements only for deleted values and update others
-			while (el.childNodes.length) {
-				el.removeChild(el.childNodes[0]);
+			for (var i = 0, n = childrenEls.length; i < n; ++i) {
+				parentEl.removeChild(childrenEls[i]);
 			}
+			childrenEls.length = 0;
 
 			for (var key in collection) {
+				if (needCheckOwnProperty && !isOwnProperty(collection, key)) {
+					continue;
+				}
+
 				var value = collection[key];
 
 				scope[keyVarName] = key;
 				scope[valVarName] = value;
 				
-				for (var i = 0, n = clonedEl.childNodes.length; i < n; ++i) {
-					var childEl = nd.utils.cloneNode(clonedEl.childNodes[i], true);
-					el.appendChild(childEl);
-					// TODO call some update for those elements and (key, val) pair.
-				}
+				var clonedEl = nd.utils.cloneNode(elCopy, true);
+				childrenEls.push(clonedEl);
+				parentEl.insertBefore(clonedEl, markComment);
+
+				// TODO call some update for this element and (key, val) pair.
+				// TODO remove test line:
+				clonedEl.innerText = JSON.stringify(value);
 			}
 		}
 
