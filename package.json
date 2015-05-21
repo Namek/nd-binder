@@ -15,6 +15,7 @@
     "del": "^1.1.1",
     "gulp": "^3.8.11",
     "gulp-add-src": "^0.2.0",
+    "gulp-concat": "^2.5.2",
     "gulp-continuous-concat": "^0.1.1",
     "gulp-footer": "^1.0.5",
     "gulp-header": "^1.2.2",
