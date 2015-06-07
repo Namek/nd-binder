@@ -20,6 +20,8 @@ return {
 		}
 	},
 
+	WeakMap: WeakMap,
+
 	cloneNode: function(node, recursive) {
 		return node.cloneNode(recursive);
 	}

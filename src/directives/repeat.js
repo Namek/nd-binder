@@ -73,10 +73,14 @@ nd.directives.create('repeat', function(d) {
 
 				// TODO call some update for this element and (key, val) pair.
 				// TODO remove test line:
-				clonedEl.innerText = JSON.stringify(value);
+				// clonedEl.innerText = JSON.stringify(value);
+				api.refreshElementTree(clonedEl);
 			}
 		}
 
-		return { };
+		return {
+			onInit: refreshView,
+			onUpdate: refreshView
+		};
 	};
-});
+}, 998);

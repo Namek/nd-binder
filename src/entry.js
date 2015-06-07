@@ -1,10 +1,11 @@
-var evalQueue = [];
-
 var directives = (function() {
-	var directives = {};
-	var instances = {};
+	var prioritizedDirectives = null;
+	var directives = { };
+	var instancesByDirective = { };// key: directive name -> array of instances
+	var instancesById = { };
+	var instancesByEl = null;
 	var instancesEverCreatedCount = 0;
-	var namedScopes = {};
+	var namedScopes = { };
 
 	var rootScope = (function() {
 		function RootScope() { }
@@ -17,243 +18,319 @@ var directives = (function() {
 		return new RootScope();
 	})();
 
+
+	function init() {
+		instancesByEl = new nd.utils.WeakMap();
+	}
+
+	function getSortedDirectivesByPriority() {
+		var arr = [];
+		for (var dName in directives) {
+			var directive = directives[dName];
+			arr.push(directive);
+		}
+		arr.sort(function(d1, d2) {
+			return d2.priority - d1.priority;
+		});
+
+		return arr;
+	}
+
 	function evalInContext(js, context) {
 		/* jshint evil:true */
 		return function() { return eval(js); }.call(context);
 	}
 
-	var api = (function() {
-		return {
-			createScope: function(parentScope) {
-				if (!parentScope) {
-					parentScope = rootScope;
+	function getDirectiveElements(directiveName, el) {
+		return nd.utils.$da(el, '[nd-' + directiveName + ']');
+	}
+
+	var evalQueue = [];
+
+	// instantiates and/or refreshes directives on elements
+	function setupElementTree(rootEl) {
+		if (!prioritizedDirectives) {
+			prioritizedDirectives = getSortedDirectivesByPriority();
+		}
+		
+		// Get all elements and instantiate directives on them!
+		for (var i = 0, n = prioritizedDirectives.length; i < n; ++i) {
+			var directive = prioritizedDirectives[i];
+			var els = getDirectiveElements(directive.name, rootEl);
+
+			for (var j = 0, m = els.length; j < m; ++j) {
+				var el = els[j];
+				var directiveValue = getNdAttr(el, directive.name);
+				var directiveInstances = instancesByEl.get(el);
+				var instance;
+				
+				if (!directiveInstances) {
+					directiveInstances = {};
+					instancesByEl.set(el, directiveInstances);
 				}
 
-				function Scope() { }
-				Scope.prototype = parentScope;
+				// Note assumption: each directive type can be instanced only once for element.
+				if (!directiveInstances[directive.name]) {
+					var instanceId = ++instancesEverCreatedCount;
+					instance = directive.instantiate(el, directiveValue);
+					directiveInstances[directive.name] = instance;
+					instancesById[instanceId] = instance;
+					instancesByDirective[directive.name].push(instance);
 
-				return new Scope();
-			},
-			inheritScope: function(scope, parentScope) {
-				Object.setPrototypeOf(scope, parentScope);
-			},
-			registerScopeName: function(scope, scopeName) {
-				if (namedScopes[scopeName]) {
-					throw "Cannot register scope named `" + scopeName + "`. Scope is already registered!";
-				}
-
-				namedScopes[scopeName] = scope;
-			},
-			getClosestScope: function(el) {
-				var scope = rootScope;
-
-				var node = el;
-				while (node && node != document) {
-					// TODO Refactor?:
-					// This condition should look into some collection of scopes.
-					// There may exist more scoping directives than `scope` and `child-scope`.
-					var scopeName = getNdAttr(node, 'scope');
-					if (scopeName) {
-						scope = api.getScopeByName(scopeName);
-						break;
+					if (instance.onInit) {
+						evalQueue.push(instance.onInit);
 					}
-
-					node = node.parentNode;
 				}
+				else {
+					// Trigger directive instance to refresh
+					instance = directiveInstances[directive.name];
 
-				return scope;
-			},
-			getRootScope: function() {
-				return rootScope;
-			},
-			getScopeByName: function(scopeName) {
-				var scope = namedScopes[scopeName];
-
-				if (!scope) {
-					throw "Scope `" + scopeName + "` doesn't exist!";
-				}
-
-				return scope;
-			},
-			getParentScopeByName: function(parentScopeName, el) {
-				var scope = api.getScopeByName(parentScopeName);
-
-				// TODO assert for parenting of this scope `el`
-
-				return scope;
-			},
-			getElementValueAccessors: function(el) {
-				var tag = el.tagName.trim();
-				var fieldName = (tag === 'input' || tag === 'select') ? 'value' : 'innerHTML';
-
-				return {
-					get: function() {
-						return el[fieldName];
-					},
-					set: function(value) {
-						el[fieldName] = value;
+					if (instance.onUpdate) {
+						instance.onUpdate();
 					}
-				};
-			},
-			observe: function(scope, observable, listener) {
-				var obj = evalInContext(observable.objectPath, scope);
+				}
+			}
+		}
 
-				if (obj === undefined) {
-					// create object or array if observed path doesn't contain any object
-					var evalNew = observable.property == 'length' ? '[]' : '{}';
-					obj = evalInContext(observable.objectPath + ' = ' + evalNew, scope);
+		for (i = 0, n = evalQueue.length; i < n; ++i) {
+			evalQueue[i]();
+		}
+		evalQueue.length = 0;
+	}
+
+	var api = {
+		refreshElementTree: function(rootEl) {
+			setupElementTree(rootEl);
+		},
+		createScope: function(parentScope) {
+			if (!parentScope) {
+				parentScope = rootScope;
+			}
+
+			function Scope() { }
+			Scope.prototype = parentScope;
+
+			return new Scope();
+		},
+		inheritScope: function(scope, parentScope) {
+			Object.setPrototypeOf(scope, parentScope);
+		},
+		registerScopeName: function(scope, scopeName) {
+			if (namedScopes[scopeName]) {
+				throw "Cannot register scope named `" + scopeName + "`. Scope is already registered!";
+			}
+
+			namedScopes[scopeName] = scope;
+		},
+		getClosestScope: function(el) {
+			var scope = rootScope;
+
+			var node = el;
+			while (node && node != document) {
+				// TODO Refactor?:
+				// This condition should look into some collection of scopes.
+				// There may exist more scoping directives than `scope` and `child-scope`.
+				var scopeName = getNdAttr(node, 'scope');
+				if (scopeName) {
+					scope = api.getScopeByName(scopeName);
+					break;
 				}
 
-				var child = this.getObjectValue(scope, observable);
-				if (typeof child === 'object') {
-					obj = child;
+				node = node.parentNode;
+			}
+
+			return scope;
+		},
+		getRootScope: function() {
+			return rootScope;
+		},
+		getScopeByName: function(scopeName) {
+			var scope = namedScopes[scopeName];
+
+			if (!scope) {
+				throw "Scope `" + scopeName + "` doesn't exist!";
+			}
+
+			return scope;
+		},
+		getParentScopeByName: function(parentScopeName, el) {
+			var scope = api.getScopeByName(parentScopeName);
+
+			// TODO assert for parenting of this scope `el`
+
+			return scope;
+		},
+		getElementValueAccessors: function(el) {
+			var tag = el.tagName.trim();
+			var fieldName = (tag === 'input' || tag === 'select') ? 'value' : 'innerHTML';
+
+			return {
+				get: function() {
+					return el[fieldName];
+				},
+				set: function(value) {
+					el[fieldName] = value;
 				}
+			};
+		},
+		observe: function(scope, observable, listener) {
+			var obj = evalInContext(observable.objectPath, scope);
 
-				nd.utils.observe(obj, function(changes) {
-					for (var i = 0; i < changes.length; ++i) {
-						var change = changes[i];
+			if (obj === undefined) {
+				// create object or array if observed path doesn't contain any object
+				var evalNew = observable.property == 'length' ? '[]' : '{}';
+				obj = evalInContext(observable.objectPath + ' = ' + evalNew, scope);
+			}
 
-						if (change.type == 'splice' || (change.type == 'update' && change.name == observable.property)) {
-							listener(change);
+			var child = this.getObjectValue(scope, observable);
+			if (typeof child === 'object') {
+				obj = child;
+			}
 
-							// Optimize: We don't need to call the refresh listener more than once.
-							return;
-						}
+			nd.utils.observe(obj, function(changes) {
+				for (var i = 0; i < changes.length; ++i) {
+					var change = changes[i];
+
+					if (change.type == 'splice' || (change.type == 'update' && change.name == observable.property)) {
+						listener(change);
+
+						// Optimize: We don't need to call the refresh listener more than once.
+						return;
 					}
-				});
+				}
+			});
 
-				return obj;
-			},
-			registerElementValueListener: function(el, listener) {
-				// TODO if input, then listen on 'value', otherwise on innerHTML
-				// TODO support contenteditable
-			},
-			setObjectValue: function(scope, valueInfo, newValue) {
-				var obj = evalInContext(valueInfo.objectPath, scope);
-				obj[valueInfo.property] = newValue;
-			},
-			getObjectValue: function(scope, observable) {
-				var obj = evalInContext(observable.objectPath, scope);
-				var val = obj[observable.property];
+			return obj;
+		},
+		registerElementValueListener: function(el, listener) {
+			// TODO if input, then listen on 'value', otherwise on innerHTML
+			// TODO support contenteditable
+		},
+		setObjectValue: function(scope, valueInfo, newValue) {
+			var obj = evalInContext(valueInfo.objectPath, scope);
+			obj[valueInfo.property] = newValue;
+		},
+		getObjectValue: function(scope, observable) {
+			var obj = evalInContext(observable.objectPath, scope);
+			var val = obj[observable.property];
 
-				return val;
-			},
+			return val;
+		},
 
-			objectExprToExprs: function(objectExpr) {
-				var expr = objectExpr.trim();
-				if (!(expr[0] == '{' && expr[expr.length-1] == '}')) {
+		objectExprToExprs: function(objectExpr) {
+			var expr = objectExpr.trim();
+			if (!(expr[0] == '{' && expr[expr.length-1] == '}')) {
+				throw classSyntaxErr;
+			}
+
+			var exprs = expr.substring(1, expr.length-1).split(',');
+			var pairs = {};
+			for (var i = 0, n = exprs.length; i < n; ++i) {
+				var keyAndExpr = exprs[i].split(':');
+
+				if (keyAndExpr.length !== 2) {
 					throw classSyntaxErr;
 				}
 
-				var exprs = expr.substring(1, expr.length-1).split(',');
-				var pairs = {};
-				for (var i = 0, n = exprs.length; i < n; ++i) {
-					var keyAndExpr = exprs[i].split(':');
+				pairs[keyAndExpr[0].trim()] = keyAndExpr[1].trim();
+			}
 
-					if (keyAndExpr.length !== 2) {
-						throw classSyntaxErr;
-					}
+			return pairs;
+		},
 
-					pairs[keyAndExpr[0].trim()] = keyAndExpr[1].trim();
-				}
+		bindingExprToObservable: function(expr) {
+			var ret = this.exprToObservables(expr, true);
 
-				return pairs;
-			},
+			if (ret.length !== 1) {
+				throw "Binding expression needs exactly one member expression (like `people.length`) or identifier call (like `pageName`).";
+			}
 
-			bindingExprToObservable: function(expr) {
-				var ret = this.exprToObservables(expr, true);
+			return ret[0];
+		},
 
-				if (ret.length !== 1) {
-					throw "Binding expression needs exactly one member expression (like `people.length`) or identifier call (like `pageName`).";
-				}
+		exprToObservables: function(expr, onlyMemberExpr) {
+			var ast = nd.utils.$expr.parse(expr);
+			var memberExprs = nd.ast.findTopMemberExpressions(ast);
+			var identifierExprs = onlyMemberExpr ? [] : nd.ast.findIdentifiers(ast);
 
-				return ret[0];
-			},
+			function addObservable(retArr, expr) {
+				var objectPath = 'this';
+				var property = null;
 
-			exprToObservables: function(expr, onlyMemberExpr) {
-				var ast = nd.utils.$expr.parse(expr);
-				var memberExprs = nd.ast.findTopMemberExpressions(ast);
-				var identifierExprs = onlyMemberExpr ? [] : nd.ast.findIdentifiers(ast);
-
-				function addObservable(retArr, expr) {
-					var objectPath = 'this';
-					var property = null;
-
-					if (expr.type === 'MemberExpression') {
-						objectPath = nd.ast.render(expr.object);
-						property = nd.ast.render(expr.property);
-					}
-					else {
-						property = expr.name;
-					}
-
-					retArr.push({
-						objectPath: objectPath,
-						property: property
-					});
-				}
-
-				var retArr = [];
-				for (var i = 0, n = memberExprs.length; i < n; ++i) {
-					addObservable(retArr, memberExprs[i]);
-				}
-				for (i = 0, n = identifierExprs.length; i < n; ++i) {
-					addObservable(retArr, identifierExprs[i]);
-				}
-
-				return retArr;
-			},
-			queue: function(func) {
-				evalQueue.push(func);
-			},
-
-			createClass: function(name, rules){
-				name = '.' + name;
-				var style = document.createElement('style');
-				style.type = 'text/css';
-				document.getElementsByTagName('head')[0].appendChild(style);
-
-				if (!(style.sheet||{}).insertRule) {
-					(style.styleSheet || style.sheet).addRule(name, rules);
+				if (expr.type === 'MemberExpression') {
+					objectPath = nd.ast.render(expr.object);
+					property = nd.ast.render(expr.property);
 				}
 				else {
-					style.sheet.insertRule(name + "{" + rules + "}", 0);
+					property = expr.name;
 				}
-			},
 
-			defineClass: function(name, element, enableClass){
-				if (typeof element.valueOf() == "string"){
-					element = document.getElementById(element);
-				}
-				if (!element) return;
+				retArr.push({
+					objectPath: objectPath,
+					property: property
+				});
+			}
 
-				if (enableClass) {
-					if (element.className.indexOf(name) < 0) {
-						element.className = (element.className + " " + name).trim();
-					}
-				}
-				else {
-					element.className = element.className.replace(new RegExp("\\b" + name + "\\b", "g"), '').trim();
+			var retArr = [];
+			for (var i = 0, n = memberExprs.length; i < n; ++i) {
+				addObservable(retArr, memberExprs[i]);
+			}
+			for (i = 0, n = identifierExprs.length; i < n; ++i) {
+				addObservable(retArr, identifierExprs[i]);
+			}
+
+			return retArr;
+		},
+		queue: function(func) {
+			evalQueue.push(func);
+		},
+
+		createClass: function(name, rules){
+			name = '.' + name;
+			var style = document.createElement('style');
+			style.type = 'text/css';
+			document.getElementsByTagName('head')[0].appendChild(style);
+
+			if (!(style.sheet||{}).insertRule) {
+				(style.styleSheet || style.sheet).addRule(name, rules);
+			}
+			else {
+				style.sheet.insertRule(name + "{" + rules + "}", 0);
+			}
+		},
+
+		defineClass: function(name, element, enableClass){
+			if (typeof element.valueOf() == "string"){
+				element = document.getElementById(element);
+			}
+			if (!element) return;
+
+			if (enableClass) {
+				if (element.className.indexOf(name) < 0) {
+					element.className = (element.className + " " + name).trim();
 				}
 			}
-		};
-	})();
+			else {
+				element.className = element.className.replace(new RegExp("\\b" + name + "\\b", "g"), '').trim();
+			}
+		}
+	};
 
-	function initDirectiveElement(directive, el) {
+	function initDirectiveElement(directive, el, instanceId) {
 		var directiveValue = getNdAttr(el, directive.name);
-		var instanceId = ++instancesEverCreatedCount;
 
 		if (!directive.initialized) {
 			directive.onFirstRun(api);
+			directive.initialized = true;
 		}
 
-		var instance = directive.onInstantiate(el, instanceId, directiveValue, api);
-
-		instances[directive.name][instanceId] = instance;
+		return directive.onInstantiate(el, instanceId, directiveValue, api);
 	}
 
 	return {
+		init: init,
 		all: directives,
+		refreshElementTree: setupElementTree,
 		create: function(name, modifyFunc, priority) {
 			if (directives[name]) {
 				throw "Directive `" + name + "` already exists!";
@@ -266,13 +343,13 @@ var directives = (function() {
 				onInstantiate: function(el, instanceId, directiveValue, api) {
 					throw "directive.onInstantiate has not been set for directive " + name;
 				},
-				instantiate: function(el) {
-					initDirectiveElement(d, el);
+				instantiate: function(el, id) {
+					return initDirectiveElement(d, el, id);
 				}
 			};
 			modifyFunc(d);
 			directives[name] = d;
-			instances[name] = {};
+			instancesByDirective[name] = [];
 			return d;
 		},
 		set: function(directive) {
@@ -281,18 +358,7 @@ var directives = (function() {
 		get: function(name) {
 			return directives[name];
 		},
-		getSortedByPriority: function() {
-			var arr = [];
-			for (var dName in directives) {
-				var directive = directives[dName];
-				arr.push(directive);
-			}
-			arr.sort(function(d1, d2) {
-				return d2.priority - d1.priority;
-			});
-
-			return arr;
-		}
+		getSortedByPriority: getSortedDirectivesByPriority
 	};
 })();
 
@@ -379,32 +445,6 @@ var listeners = (function() {
 
 nd.directives = directives;
 nd.init = function() {
-	// get all elements and setup directives on them!
-	// TODO maybe it should go the hierarchy way.
-	//      One element having more than one directive
-	//      would be easier to debug then.
-
-
-	function getDirectiveElements(directiveName, scope) {
-		return nd.utils.$da(scope, '[nd-' + directiveName + ']');
-	}
-
-	var prioritizedDirectives = directives.getSortedByPriority();
-
-	for (var i = 0, n = prioritizedDirectives.length; i < n; ++i) {
-		var directive = prioritizedDirectives[i];
-		var els = getDirectiveElements(directive.name, document);
-
-		for (var j = 0, m = els.length; j < m; ++j) {
-			var el = els[j];
-			var directiveValue = getNdAttr(el, directive.name);
-
-			directive.instantiate(el, directiveValue);
-		}
-	}
-
-	for (i = 0, n = evalQueue.length; i < n; ++i) {
-		evalQueue[i]();
-	}
-	evalQueue.length = 0;
+	directives.init();
+	directives.refreshElementTree(document);
 };

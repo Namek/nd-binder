@@ -32,10 +32,11 @@ nd.directives.create('class', function(d) {
 			}
 		}
 
-		api.queue(refreshView);
+		// api.queue(refreshView);
 
 		return {
-			onObservableChanged: refreshView()
+			onInit: refreshView,
+			onUpdate: refreshView
 		};
 	};
 });

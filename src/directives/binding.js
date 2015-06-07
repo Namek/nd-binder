@@ -12,10 +12,11 @@ nd.directives.create('bind', function(d) {
 		}
 
 		api.observe(scope, observable, refreshView);
-		api.queue(refreshView);
+		// api.queue(refreshView);
 
 		return {
-			onObservableChanged: refreshView
+			onInit: refreshView,
+			onUpdate: refreshView
 		};
 	};
 });

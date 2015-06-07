@@ -21,7 +21,8 @@ nd.directives.create('show', function(d) {
 		api.queue(refreshView);
 
 		return {
-			onObservableChanged: refreshView()
+			onInit: refreshView,
+			onUpdate: refreshView
 		};
 	};
 });
