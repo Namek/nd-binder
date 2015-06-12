@@ -149,6 +149,14 @@ var directives = (function() {
 				// TODO Refactor?:
 				// This condition should look into some collection of scopes.
 				// There may exist more scoping directives than `scope` and `child-scope`.
+
+				// TODO scope hierarchy binded, all scopes binded to some elements
+				// refactor: we need to build scope hierarchy remembed somewhere.
+				//           Directives should have an option to get scope for given element.
+				//
+				// problem: how to bind scope with elements? ng-repeat element changes.
+				//          Maybe pair with comments for destroyable elements?
+				//
 				var scopeName = getNdAttr(node, 'scope');
 				if (scopeName) {
 					scope = api.getScopeByName(scopeName);
