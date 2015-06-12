@@ -37,7 +37,7 @@
 	</script>
 </head>
 <body nd-scope="PeopleScope">
-	<header nd-bind="page.name"></header>
+	<!--header nd-bind="page.name"></header>
 	<span nd-bind="people.length"></span>
 
 	<p nd-if="people.length > 1" nd-class="{two: people.length==2, three: people.length==3}">There is more than one person!</p>
@@ -54,7 +54,7 @@
 
 		<span nd-show="people.length==1">person.</span>
 		<span nd-show="people.length!=1">people.</span>
-	</p>
+	</p-->
 
 	<ul>
 		<li nd-repeat="person in people">

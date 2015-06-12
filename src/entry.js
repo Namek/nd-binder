@@ -48,59 +48,78 @@ var directives = (function() {
 	var evalQueue = [];
 
 	// instantiates and/or refreshes directives on elements
-	function setupElementTree(rootEl) {
+	function setupElementTree(el, directivesToOmit) {
 		if (!prioritizedDirectives) {
 			prioritizedDirectives = getSortedDirectivesByPriority();
 		}
-		
-		// Get all elements and instantiate directives on them!
-		for (var i = 0, n = prioritizedDirectives.length; i < n; ++i) {
-			var directive = prioritizedDirectives[i];
-			var els = getDirectiveElements(directive.name, rootEl);
 
-			for (var j = 0, m = els.length; j < m; ++j) {
-				var el = els[j];
-				var directiveValue = getNdAttr(el, directive.name);
-				var directiveInstances = instancesByEl.get(el);
-				var instance;
-				
-				if (!directiveInstances) {
-					directiveInstances = {};
-					instancesByEl.set(el, directiveInstances);
-				}
+		var evalQueue = [];
 
-				// Note assumption: each directive type can be instanced only once for element.
-				if (!directiveInstances[directive.name]) {
-					var instanceId = ++instancesEverCreatedCount;
-					instance = directive.instantiate(el, directiveValue);
-					directiveInstances[directive.name] = instance;
-					instancesById[instanceId] = instance;
-					instancesByDirective[directive.name].push(instance);
+		// wchodzimy do elementu i znajdujemy wszystkie dyrektywy, odpalamy wg priorytetu
+		var attrs = el.attributes;
 
-					if (instance.onInit) {
-						evalQueue.push(instance.onInit);
+		if (attrs) {
+			var anyElementHasOwnScope = false;
+			var i, j, n;
+
+			// Find attributes for this element
+			var directiveInstances = instancesByEl.get(el);
+			if (!directiveInstances) {
+				directiveInstances = {};
+				instancesByEl.set(el, directiveInstances);
+			}
+
+			for (i = 0; i < attrs.length; ++i) {
+				var attr = attrs[i];
+
+				for (j = 0; j < prioritizedDirectives.length; ++j) {
+					var directive = prioritizedDirectives[j];
+					// TODO directive names shouldn't work only for `nd-` prefix
+					var directiveName = 'nd-' + directive.name;
+
+					if (directivesToOmit && directivesToOmit.indexOf(directiveName) >= 0) {
+						continue;
 					}
-				}
-				else {
-					// Trigger directive instance to refresh
-					instance = directiveInstances[directive.name];
 
-					if (instance.onUpdate) {
-						instance.onUpdate();
+					if (attr.name.indexOf(directiveName) === 0) {
+						// Note assumption: each directive type can be instanced only once for element.
+						if (!directiveInstances[directive.name]) {
+							var instanceId = ++instancesEverCreatedCount;
+							instance = directive.instantiate(el, attr.value);
+							directiveInstances[directive.name] = instance;
+							instancesById[instanceId] = instance;
+							instancesByDirective[directive.name].push(instance);
+
+							if (instance.onInit) {
+								// instance.onInit._directive = directive.name;
+								// evalQueue.push(instance.onInit);
+								instance.onInit();
+							}
+						}
+						else {
+							// Trigger directive instance to refresh
+							instance = directiveInstances[directive.name];
+
+							if (instance.onUpdate) {
+								instance.onUpdate();
+							}
+						}
 					}
 				}
 			}
 		}
 
-		for (i = 0, n = evalQueue.length; i < n; ++i) {
-			evalQueue[i]();
+		// Go to children
+		if (!anyElementHasOwnScope && el.children) {
+			for (i = 0, n = el.children.length; i < n; ++i) {
+				setupElementTree(el.children[i]);
+			}
 		}
-		evalQueue.length = 0;
 	}
 
 	var api = {
-		refreshElementTree: function(rootEl) {
-			setupElementTree(rootEl);
+		refreshElementTree: function(rootEl, directivesToOmit) {
+			setupElementTree(rootEl, directivesToOmit);
 		},
 		createScope: function(parentScope) {
 			if (!parentScope) {
@@ -144,7 +163,7 @@ var directives = (function() {
 		getRootScope: function() {
 			return rootScope;
 		},
-		getScopeByName: function(scopeName) {
+		getScopeByName: function(scopeName) {//TODO @deprecated
 			var scope = namedScopes[scopeName];
 
 			if (!scope) {
@@ -153,7 +172,7 @@ var directives = (function() {
 
 			return scope;
 		},
-		getParentScopeByName: function(parentScopeName, el) {
+		getParentScopeByName: function(parentScopeName, el) {//TODO @deprecated
 			var scope = api.getScopeByName(parentScopeName);
 
 			// TODO assert for parenting of this scope `el`
@@ -281,7 +300,7 @@ var directives = (function() {
 
 			return retArr;
 		},
-		queue: function(func) {
+		queue: function(func) {//TODO @deprecated
 			evalQueue.push(func);
 		},
 
