@@ -11,8 +11,10 @@ nd.directives.create('bind', function(d) {
 			accessors.set(newValue);
 		}
 
-		api.observe(scope, observable, refreshView);
-		// api.queue(refreshView);
+		// api.observe(scope, observable, refreshView);
+		api.observe(scope, observable, function() {
+			api.refreshElementTree(el);
+		});
 
 		return {
 			onInit: refreshView,

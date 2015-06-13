@@ -11,47 +11,16 @@ nd.directives.create('scope', function(d) {
 		if (!scope) {
 			throw "There is no scope in: window['" + scopeName + "']";
 		}
-
-		// TODO byc moze zamiast `child-scope` dac tutaj mozliwosc
-		// wstawienia po przecinku nazwy scope'a-rodzica
-		// var parentScope = api.getClosestScope(el);
-		var parentScope = api.getRootScope();
-		api.inheritScope(scope, parentScope);
-		api.registerScopeName(scope, scopeName);
+		
+		// api.registerScopeName(scope, scopeName);
+		// var scopeId = api.registerScope(scope);
+		api.assignScopeToElement(scope, el);
 
 		// TODO ?
 		return { };
 	};
-}, 1000);
+}, {
+	priority: 10
+});
 
-// TODO trzeba zmienic to ponizej bo nie zgadza sie z inheritem (chyba?)
-nd.directives.create('child-scope', function(d) {
-	d.onInstantiate = function(el, id, directiveValue, api) {
-		var parentScope = null;
-		var scopeName = null;
-
-		if (!directiveValue) {
-			parentScope = api.getClosestScope(el);
-		}
-		else if (directiveValue.indexOf(',') > 0) {
-			var scopeNames = directiveValue.split();
-			scopeName = scopeNames[0];
-			var parentScopeName = scopeNames[1];
-
-			parentScope = api.getParentScopeByName(parentScopeName, el);
-		}
-		else {
-			scopeName = directiveValue;
-			parentScope = api.getClosestScope(el);
-		}
-
-		var newScope = api.createScope(parentScope);
-
-		if (scopeName) {
-			api.registerScopeName(newScope, scopeName);
-		}
-
-		// TODO ?
-		return { };
-	};
-}, 999);
+// TODO nd.directives.create('subscope', ...

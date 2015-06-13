@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>nd-binder</title>
+	<script src="../dist/nd-binder.js" type="text/javascript" charset="utf-8"></script>
+	<script type="text/javascript">
+		var BaseScope = new function() {
+			this.people = [
+				{
+					fname: 'John',
+					lname: 'Depp'
+				},
+				{
+					fname: 'Jet',
+					lname: 'Li'
+				}
+			];
+		};
+
+		var OtherScope = new function() {
+			this.people = [];
+			this.text = "text from OtherScope";
+		};
+
+		setTimeout(function() {
+			BaseScope.people.push({fname: 'omg', lname: 'omg'});
+		}, 1000);
+
+		window.addEventListener('load', function() {
+			ndBinder.init();
+		});
+	</script>
+</head>
+<body nd-scope="BaseScope">
+
+	<!-- this scope doesn't inherit from BaseScope -->
+	<ul nd-scope="OtherScope">
+		<li ng-bind="text"></li>
+		<li nd-repeat="person in people">
+			it's empty anyway
+		</li>
+	</ul>
+
+	<!-- this new scope inherits from BaseScope and it's anonymous -->
+	<div nd-subscope></div>
+
+	<!-- this new scope inherits from OtherScope and it's anonymous -->
+	<div nd-subscope="OtherScope"></div>
+
+	<ul>
+		<!-- this nd-repeat has own scope which inherits from BaseScope to access `people` collection -->
+		<li nd-repeat="person in people">
+			<span nd-bind="person.fname"></span>
+			<span nd-bind="person.lname"></span>
+
+			<!-- this nd-repeat has own scope which inherits from upper nd-repeat's scope to access `person` -->
+			<span nd-repeat="(key, value) in person" nd-bind="value"></span>
+		</li>
+	</ul>
+
+</body>
+</html>

@@ -6,6 +6,7 @@ var directives = (function() {
 	var instancesByEl = null;
 	var instancesEverCreatedCount = 0;
 	var namedScopes = { };
+	var createdScopes = { };// key: $$scopeId -> scope object
 
 	var rootScope = (function() {
 		function RootScope() { }
@@ -21,6 +22,7 @@ var directives = (function() {
 
 	function init() {
 		instancesByEl = new nd.utils.WeakMap();
+		createdScopes = new nd.utils.WeakMap();
 	}
 
 	function getSortedDirectivesByPriority() {
@@ -30,7 +32,7 @@ var directives = (function() {
 			arr.push(directive);
 		}
 		arr.sort(function(d1, d2) {
-			return d2.priority - d1.priority;
+			return d2.settings.priority - d1.settings.priority;
 		});
 
 		return arr;
@@ -59,7 +61,7 @@ var directives = (function() {
 		var attrs = el.attributes;
 
 		if (attrs) {
-			var anyElementHasOwnScope = false;
+			var manualElementTreeRefresh = false;
 			var i, j, n;
 
 			// Find attributes for this element
@@ -81,11 +83,15 @@ var directives = (function() {
 						continue;
 					}
 
+					if (!manualElementTreeRefresh && directive.manualElementTreeRefresh) {
+						manualElementTreeRefresh = true;
+					}
+
 					if (attr.name.indexOf(directiveName) === 0) {
 						// Note assumption: each directive type can be instanced only once for element.
 						if (!directiveInstances[directive.name]) {
 							var instanceId = ++instancesEverCreatedCount;
-							instance = directive.instantiate(el, attr.value);
+							instance = directive.instantiate(el, instanceId);
 							directiveInstances[directive.name] = instance;
 							instancesById[instanceId] = instance;
 							instancesByDirective[directive.name].push(instance);
@@ -110,18 +116,26 @@ var directives = (function() {
 		}
 
 		// Go to children
-		if (!anyElementHasOwnScope && el.children) {
+		if (!manualElementTreeRefresh && el.children) {
 			for (i = 0, n = el.children.length; i < n; ++i) {
 				setupElementTree(el.children[i]);
 			}
 		}
 	}
 
+	var latestId = 0;
+	function generateId() {
+		return ++latestId;
+	}
+
 	var api = {
-		refreshElementTree: function(rootEl, directivesToOmit) {
-			setupElementTree(rootEl, directivesToOmit);
+		refreshElementTree: function(el, directivesToOmit) {
+			setupElementTree(el, directivesToOmit);
 		},
-		createScope: function(parentScope) {
+		getScopeById: function(scopeId) {
+			return createdScopes[scopeId];
+		},
+		createScope: function(parentScope, el) {
 			if (!parentScope) {
 				parentScope = rootScope;
 			}
@@ -129,38 +143,59 @@ var directives = (function() {
 			function Scope() { }
 			Scope.prototype = parentScope;
 
-			return new Scope();
+			var scope = new Scope();
+			var scopeId = generateId();
+			scope.$$scopeId = scopeId;
+			createdScopes[scopeId] = scope;
+
+			if (!!el) {
+				api.assignScopeToElement(scope, el);
+			}
+
+			return scope;
 		},
-		inheritScope: function(scope, parentScope) {
+		inheritScope: function(scope, parentScope) {// TODO @deprecated
 			Object.setPrototypeOf(scope, parentScope);
 		},
-		registerScopeName: function(scope, scopeName) {
+		registerScopeName: function(scope, scopeName) {// TODO @deprecated
 			if (namedScopes[scopeName]) {
 				throw "Cannot register scope named `" + scopeName + "`. Scope is already registered!";
 			}
 
 			namedScopes[scopeName] = scope;
 		},
+		registerScope: function(scope) {
+			var scopeId = generateId();
+			createdScopes[scopeId] = scope;
+
+			return scopeId;
+		},
+		assignScopeToElement: function(scope, el) {
+			var scopeId = api.registerScope(scope);
+			el.$$scopeId = scopeId;
+		},
 		getClosestScope: function(el) {
 			var scope = rootScope;
 
 			var node = el;
 			while (node && node != document) {
-				// TODO Refactor?:
-				// This condition should look into some collection of scopes.
-				// There may exist more scoping directives than `scope` and `child-scope`.
+				if (node != el && node.$$scopeId) {
+					return api.getScopeById(node.$$scopeId);
+				}
 
-				// TODO scope hierarchy binded, all scopes binded to some elements
-				// refactor: we need to build scope hierarchy remembed somewhere.
-				//           Directives should have an option to get scope for given element.
-				//
-				// problem: how to bind scope with elements? ng-repeat element changes.
-				//          Maybe pair with comments for destroyable elements?
-				//
-				var scopeName = getNdAttr(node, 'scope');
-				if (scopeName) {
-					scope = api.getScopeByName(scopeName);
-					break;
+				// Look for scopeId in sibling comments
+				var siblingNode = node.nextSibling;
+
+				while (siblingNode) {
+					if (siblingNode.nodeType === Node.COMMENT_NODE) {
+						if (siblingNode.$$scopeId) {
+							return api.getScopeById(siblingNode.$$scopeId);
+						}
+						siblingNode = null;
+					}
+					else {
+						siblingNode = siblingNode.nextSibling;
+					}
 				}
 
 				node = node.parentNode;
@@ -179,6 +214,24 @@ var directives = (function() {
 			}
 
 			return scope;
+		},
+		getParentScope: function(scope) {
+			var parentScope = Object.getPrototypeOf(scope);
+
+			if (!parentScope) {
+				throw "This scope doesn't have parent!";
+			}
+
+			return parentScope;
+		},
+		getParentScopeOrRoot: function(scope) {
+			var parentScope = Object.getPrototypeOf(scope);
+
+			if (!parentScope) {
+				parentScope = rootScope;
+			}
+
+			return parentScope;
 		},
 		getParentScopeByName: function(parentScopeName, el) {//TODO @deprecated
 			var scope = api.getScopeByName(parentScopeName);
@@ -358,14 +411,26 @@ var directives = (function() {
 		init: init,
 		all: directives,
 		refreshElementTree: setupElementTree,
-		create: function(name, modifyFunc, priority) {
+		create: function(name, modifyFunc, settings) {
 			if (directives[name]) {
 				throw "Directive `" + name + "` already exists!";
 			}
 
+			if (!settings) {
+				settings = {};
+			}
+
+			if (!settings.priority) {
+				settings.priority = 0;
+			}
+
+			if (!settings.subScope) {
+				settings.subScope = false;
+			}
+
 			var d = {
 				name: name,
-				priority: priority || 10,
+				settings: settings,
 				onFirstRun: function(api) { },
 				onInstantiate: function(el, instanceId, directiveValue, api) {
 					throw "directive.onInstantiate has not been set for directive " + name;

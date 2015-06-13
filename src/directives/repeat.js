@@ -35,13 +35,12 @@ nd.directives.create('repeat', function(d) {
 		var parentEl = el.parentNode;
 		var elCopy = nd.utils.cloneNode(el, true);
 		elCopy.removeAttribute('nd-repeat');
-		var markComment = document.createComment('nd-repeat');
+		var markComment = document.createComment('nd-repeat: ' + directiveValue);
+		api.assignScopeToElement(scope, markComment);
 		parentEl.insertBefore(markComment, el);
 		parentEl.removeChild(el);
 
 		var childrenEls = [];
-
-		// api.queue(refreshView);
 		var data = { };
 
 
@@ -72,9 +71,6 @@ nd.directives.create('repeat', function(d) {
 				childrenEls.push(clonedEl);
 				parentEl.insertBefore(clonedEl, markComment);
 
-				// TODO call some update for this element and (key, val) pair.
-				// TODO remove test line:
-				// clonedEl.innerText = JSON.stringify(value);
 				api.refreshElementTree(clonedEl, ['nd-repeat']);
 			}
 		}
@@ -90,4 +86,7 @@ nd.directives.create('repeat', function(d) {
 			onUpdate: refreshView
 		};
 	};
-}, 998);
+}, {
+	priority: 8,
+	manualElementTreeRefresh: true
+});
